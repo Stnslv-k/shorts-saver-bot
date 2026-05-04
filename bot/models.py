@@ -5,6 +5,17 @@ from datetime import datetime
 from typing import Any
 
 
+def _normalize_tools(raw: list[Any]) -> list[dict[str, Any]]:
+    """Normalize tools to list[dict] with at minimum a 'name' key."""
+    result = []
+    for item in raw:
+        if isinstance(item, str):
+            result.append({"name": item, "url": None})
+        elif isinstance(item, dict):
+            result.append({"name": item.get("name", ""), "url": item.get("url")})
+    return result
+
+
 @dataclass
 class ExtractionResult:
     title: str
@@ -12,7 +23,7 @@ class ExtractionResult:
     summary: str
     github_repos: list[dict[str, str]] = field(default_factory=list)
     recipe: dict[str, Any] | None = None
-    tools: list[str] = field(default_factory=list)
+    tools: list[dict[str, Any]] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
 
     @classmethod
@@ -23,7 +34,7 @@ class ExtractionResult:
             summary=data.get("summary", ""),
             github_repos=data.get("github_repos", []),
             recipe=data.get("recipe"),
-            tools=data.get("tools", []),
+            tools=_normalize_tools(data.get("tools", [])),
             tags=data.get("tags", []),
         )
 
@@ -37,7 +48,7 @@ class KnowledgeEntry:
     extracted_at: datetime
     github_repos: list[dict[str, str]] = field(default_factory=list)
     recipe: dict[str, Any] | None = None
-    tools: list[str] = field(default_factory=list)
+    tools: list[dict[str, Any]] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     raw_transcript: str = ""
 

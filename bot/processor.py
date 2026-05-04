@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from bot.llm.base import LLMBackend
-from bot.models import KnowledgeEntry
+from bot.models import ExtractionResult, KnowledgeEntry
 from bot.storage.base import StorageBackend
 
 if TYPE_CHECKING:
+    from bot.search.base import SearchBackend
     from bot.vision.base import VisionBackend
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ async def process_url(
     llm: LLMBackend,
     storage: StorageBackend,
     vision: "VisionBackend | None" = None,
+    search: "SearchBackend | None" = None,
 ) -> tuple[KnowledgeEntry, str, str]:
     """
     Full pipeline: URL → transcript (+ optional vision) → LLM extraction → storage.
@@ -31,11 +34,64 @@ async def process_url(
     result = await llm.extract(combined_input)
     logger.info("Extracted: category=%s title=%r", result.category, result.title)
 
+    if search is not None:
+        result = await _enrich_with_urls(result, search)
+
     # Store only the raw audio transcript in the entry, not the combined prompt
     raw_transcript = _extract_transcript_section(combined_input)
     entry = KnowledgeEntry.from_extraction(result, source_url=url, raw_transcript=raw_transcript)
     confirmation, storage_ref = await storage.save(entry)
     return entry, confirmation, storage_ref
+
+
+async def _already(value: str | None) -> str | None:
+    return value
+
+
+async def _enrich_with_urls(result: ExtractionResult, search: "SearchBackend") -> ExtractionResult:
+    """Find URLs for tools and GitHub repos that don't have one, concurrently."""
+    tool_tasks = [
+        search.find_url(tool["name"], context="developer tool")
+        if not tool.get("url")
+        else _already(tool.get("url"))
+        for tool in result.tools
+    ]
+
+    repo_tasks = [
+        search.find_url(repo["name"], context="github")
+        if not repo.get("url")
+        else _already(repo.get("url"))
+        for repo in result.github_repos
+    ]
+
+    all_results = await asyncio.gather(*tool_tasks, *repo_tasks, return_exceptions=True)
+
+    tool_urls = all_results[: len(result.tools)]
+    repo_urls = all_results[len(result.tools):]
+
+    enriched_tools = []
+    for tool, url in zip(result.tools, tool_urls):
+        enriched_tools.append({
+            "name": tool["name"],
+            "url": url if isinstance(url, str) else tool.get("url"),
+        })
+
+    enriched_repos = []
+    for repo, url in zip(result.github_repos, repo_urls):
+        enriched_repos.append({
+            **repo,
+            "url": repo.get("url") or (url if isinstance(url, str) else None),
+        })
+
+    return ExtractionResult(
+        title=result.title,
+        category=result.category,
+        summary=result.summary,
+        github_repos=enriched_repos,
+        recipe=result.recipe,
+        tools=enriched_tools,
+        tags=result.tags,
+    )
 
 
 async def _build_llm_input(url: str, vision: "VisionBackend | None") -> str:
