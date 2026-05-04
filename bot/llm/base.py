@@ -45,6 +45,8 @@ Tools extraction:
 - Return empty array if none
 - If a tool or product name appears to be a phonetic Russian transliteration of an English name (e.g. "стич" → "Stitch", "антигравити" → "Antigravity", "опол" → "Opal"), restore the correct English spelling. Always output tool names in their original language (usually English).
 - For GitHub projects, reconstruct the correct repo name if it was phonetically transcribed.
+- If you cannot determine the correct English product name from context, output the tool as a descriptive phrase in English (e.g. "Google GitHub coding agent") rather than a Russian transliteration.
+- Never output Russian words as tool names unless the tool is explicitly a Russian-language product.
 
 Tags:
 - Generate 3-5 relevant tags

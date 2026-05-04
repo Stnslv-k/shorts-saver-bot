@@ -48,14 +48,27 @@ async def _already(value: str | None) -> str | None:
     return value
 
 
+def _looks_like_product_name(name: str) -> bool:
+    """Return True if name looks like a real product name worth searching for."""
+    words = name.split()
+    if len(words) > 2:
+        return False
+    # Reject names containing Cyrillic characters
+    if any("Ѐ" <= c <= "ӿ" for c in name):
+        return False
+    return True
+
+
 async def _enrich_with_urls(result: ExtractionResult, search: "SearchBackend") -> ExtractionResult:
     """Find URLs for tools and GitHub repos that don't have one, concurrently."""
-    tool_tasks = [
-        search.find_url(tool["name"], context="developer tool")
-        if not tool.get("url")
-        else _already(tool.get("url"))
-        for tool in result.tools
-    ]
+    tool_tasks = []
+    for tool in result.tools:
+        if tool.get("url"):
+            tool_tasks.append(_already(tool["url"]))
+        elif _looks_like_product_name(tool["name"]):
+            tool_tasks.append(search.find_url(tool["name"], context="developer tool"))
+        else:
+            tool_tasks.append(_already(None))
 
     repo_tasks = [
         search.find_url(repo["name"], context="github")
