@@ -18,7 +18,7 @@ class ObsidianAdapter(StorageBackend):
     def __init__(self, config: ObsidianConfig) -> None:
         self._vault_path = Path(config.vault_path)
 
-    async def save(self, entry: KnowledgeEntry) -> str:
+    async def save(self, entry: KnowledgeEntry) -> tuple[str, str]:
         self._vault_path.mkdir(parents=True, exist_ok=True)
 
         filename = _sanitize_filename(entry.title) + ".md"
@@ -35,7 +35,19 @@ class ObsidianAdapter(StorageBackend):
             await f.write(content)
 
         logger.info("Obsidian note saved: %s", filepath)
-        return f"Saved to Obsidian: {filepath.name}"
+        return f"Saved to Obsidian: {filepath.name}", str(filepath)
+
+    async def delete_by_ref(self, ref: str) -> bool:
+        try:
+            path = Path(ref)
+            if path.exists():
+                path.unlink()
+                logger.info("Obsidian note deleted: %s", ref)
+                return True
+            return False
+        except Exception as e:
+            logger.warning("Failed to delete Obsidian note %s: %s", ref, e)
+            return False
 
     async def list_recent(self, n: int = 5) -> list[KnowledgeEntry]:
         if not self._vault_path.exists():
