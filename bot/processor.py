@@ -59,42 +59,64 @@ def _looks_like_product_name(name: str) -> bool:
     return True
 
 
+def _short_video_context(title: str) -> str:
+    """Return up to 6 words from the video title for use as search context."""
+    words = title.split()
+    return " ".join(words[:6])
+
+
 async def _enrich_with_urls(result: ExtractionResult, search: "SearchBackend") -> ExtractionResult:
-    """Find URLs for tools and GitHub repos that don't have one, concurrently."""
-    tool_tasks = []
-    for tool in result.tools:
+    """Find URLs for tools and GitHub repos that don't have one."""
+    from bot.search.brave import BraveSearchBackend
+    from bot.search.duckduckgo import DuckDuckGoBackend
+
+    video_context = _short_video_context(result.title) if result.title else ""
+    is_ddg = isinstance(search, DuckDuckGoBackend)
+
+    async def _find_tool_url(tool: dict) -> str | None:
         if tool.get("url"):
-            tool_tasks.append(_already(tool["url"]))
-        elif _looks_like_product_name(tool["name"]):
-            tool_tasks.append(search.find_url(tool["name"], context="developer tool"))
-        else:
-            tool_tasks.append(_already(None))
+            return tool["url"]
+        if not _looks_like_product_name(tool["name"]):
+            return None
+        return await search.find_url(tool["name"], context="developer tool", video_context=video_context)
 
-    repo_tasks = [
-        search.find_url(repo["name"], context="github")
-        if not repo.get("url")
-        else _already(repo.get("url"))
-        for repo in result.github_repos
+    async def _find_repo_url(repo: dict) -> str | None:
+        if repo.get("url"):
+            return repo["url"]
+        return await search.find_url(repo["name"], context="github", video_context=video_context)
+
+    if is_ddg:
+        # DuckDuckGo rate-limits under parallel load — run sequentially with a small delay
+        tool_urls: list[str | None] = []
+        for tool in result.tools:
+            url = await _find_tool_url(tool)
+            tool_urls.append(url)
+            await asyncio.sleep(0.5)
+
+        repo_urls: list[str | None] = []
+        for repo in result.github_repos:
+            url = await _find_repo_url(repo)
+            repo_urls.append(url)
+            await asyncio.sleep(0.5)
+    else:
+        # Brave handles concurrency fine — gather all at once
+        tool_results = await asyncio.gather(
+            *[_find_tool_url(tool) for tool in result.tools], return_exceptions=True
+        )
+        repo_results = await asyncio.gather(
+            *[_find_repo_url(repo) for repo in result.github_repos], return_exceptions=True
+        )
+        tool_urls = [u if isinstance(u, str) else None for u in tool_results]
+        repo_urls = [u if isinstance(u, str) else None for u in repo_results]
+
+    enriched_tools = [
+        {"name": tool["name"], "url": url or tool.get("url")}
+        for tool, url in zip(result.tools, tool_urls)
     ]
-
-    all_results = await asyncio.gather(*tool_tasks, *repo_tasks, return_exceptions=True)
-
-    tool_urls = all_results[: len(result.tools)]
-    repo_urls = all_results[len(result.tools):]
-
-    enriched_tools = []
-    for tool, url in zip(result.tools, tool_urls):
-        enriched_tools.append({
-            "name": tool["name"],
-            "url": url if isinstance(url, str) else tool.get("url"),
-        })
-
-    enriched_repos = []
-    for repo, url in zip(result.github_repos, repo_urls):
-        enriched_repos.append({
-            **repo,
-            "url": repo.get("url") or (url if isinstance(url, str) else None),
-        })
+    enriched_repos = [
+        {**repo, "url": repo.get("url") or url}
+        for repo, url in zip(result.github_repos, repo_urls)
+    ]
 
     return ExtractionResult(
         title=result.title,
