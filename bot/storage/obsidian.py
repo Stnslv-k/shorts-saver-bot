@@ -88,7 +88,8 @@ def _render_markdown(entry: KnowledgeEntry) -> str:
         tags_str = ", ".join(f'"{t}"' for t in entry.tags)
         lines.append(f"tags: [{tags_str}]")
     if entry.tools:
-        tools_str = ", ".join(f'"{t}"' for t in entry.tools)
+        tool_names = [t["name"] if isinstance(t, dict) else t for t in entry.tools]
+        tools_str = ", ".join(f'"{n}"' for n in tool_names)
         lines.append(f"tools: [{tools_str}]")
     lines.append("---")
     lines.append("")
@@ -144,10 +145,18 @@ def _render_markdown(entry: KnowledgeEntry) -> str:
 
     # Tools
     if entry.tools:
-        lines.append("## Tools Mentioned")
+        lines.append("## Tools")
         lines.append("")
         for tool in entry.tools:
-            lines.append(f"- {tool}")
+            if isinstance(tool, dict):
+                name = tool.get("name", "")
+                url = tool.get("url")
+                if url:
+                    lines.append(f"- [{name}]({url})")
+                else:
+                    lines.append(f"- {name}")
+            else:
+                lines.append(f"- {tool}")
         lines.append("")
 
     # Source
@@ -190,6 +199,11 @@ async def _parse_markdown_file(path: Path) -> KnowledgeEntry | None:
         frontmatter_str = content[3:end].strip()
         frontmatter = yaml.safe_load(frontmatter_str) or {}
 
+        raw_tools = frontmatter.get("tools", [])
+        tools = [
+            {"name": t, "url": None} if isinstance(t, str) else t
+            for t in raw_tools
+        ]
         return KnowledgeEntry(
             title=frontmatter.get("title", path.stem),
             category=frontmatter.get("category", "general"),
@@ -197,7 +211,7 @@ async def _parse_markdown_file(path: Path) -> KnowledgeEntry | None:
             source_url=frontmatter.get("source_url", ""),
             extracted_at=_parse_dt(frontmatter.get("extracted_at")),
             tags=frontmatter.get("tags", []),
-            tools=frontmatter.get("tools", []),
+            tools=tools,
         )
     except Exception as e:
         logger.warning("Failed to parse Obsidian note %s: %s", path, e)

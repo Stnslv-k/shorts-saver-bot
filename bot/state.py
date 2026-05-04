@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from bot.config import AppConfig
     from bot.llm.base import LLMBackend
+    from bot.search.base import SearchBackend
     from bot.storage.base import StorageBackend
     from bot.vision.base import VisionBackend
 
@@ -19,9 +20,11 @@ class BotState:
     llm_backend: LLMBackend | None = field(default=None)
     storage_backend: StorageBackend | None = field(default=None)
     vision_backend: VisionBackend | None = field(default=None)
+    search_backend: SearchBackend | None = field(default=None)
 
     def rebuild_backends(self) -> None:
         from bot.llm import build_llm_backend
+        from bot.search import build_search_backend
         from bot.storage import build_storage_backend
         from bot.vision import build_vision_backend
 
@@ -48,6 +51,14 @@ class BotState:
                 self.vision_backend = None
         else:
             self.vision_backend = None
+
+        try:
+            self.search_backend = build_search_backend(self.config)
+            if self.search_backend is not None:
+                logger.info("Search backend built: %s", self.config.search.backend)
+        except Exception as e:
+            logger.warning("Failed to build search backend: %s", e)
+            self.search_backend = None
 
     def is_ready(self) -> bool:
         return self.llm_backend is not None and self.storage_backend is not None

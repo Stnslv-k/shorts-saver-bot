@@ -17,3 +17,6 @@ anthropic==0.40.0
 
 # Storage backends
 notion-client==2.2.1
+
+# Search backends
+duckduckgo-search>=6.0.0

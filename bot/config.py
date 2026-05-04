@@ -74,6 +74,13 @@ class VisionConfig:
 
 
 @dataclass
+class SearchConfig:
+    enabled: bool = True
+    backend: str = "duckduckgo"  # duckduckgo | brave
+    brave_api_key: str = ""
+
+
+@dataclass
 class BotConfig:
     token: str = ""
     password: str = ""
@@ -85,6 +92,7 @@ class AppConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     vision: VisionConfig = field(default_factory=VisionConfig)
+    search: SearchConfig = field(default_factory=SearchConfig)
 
 
 def _parse_llm(raw: dict[str, Any]) -> LLMConfig:
@@ -153,6 +161,23 @@ def _parse_vision(raw: dict[str, Any], llm_raw: dict[str, Any]) -> VisionConfig:
     )
 
 
+def _parse_search(raw: dict[str, Any]) -> SearchConfig:
+    search_enabled_env = os.getenv("SEARCH_ENABLED", "").lower()
+    if search_enabled_env in ("true", "1", "yes"):
+        enabled = True
+    elif search_enabled_env in ("false", "0", "no"):
+        enabled = False
+    else:
+        enabled = bool(raw.get("enabled", True))
+
+    brave_raw = raw.get("brave", {})
+    return SearchConfig(
+        enabled=enabled,
+        backend=os.getenv("SEARCH_BACKEND", raw.get("backend", "duckduckgo")),
+        brave_api_key=os.getenv("BRAVE_API_KEY", brave_raw.get("api_key", "")),
+    )
+
+
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
     """Load config from env vars and optional YAML file.
 
@@ -176,6 +201,7 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         llm=_parse_llm(llm_raw),
         storage=_parse_storage(raw.get("storage", {})),
         vision=_parse_vision(raw.get("vision", {}), llm_raw),
+        search=_parse_search(raw.get("search", {})),
     )
 
 

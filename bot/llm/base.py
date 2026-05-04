@@ -43,6 +43,8 @@ Recipe extraction:
 Tools extraction:
 - List any software tools, apps, frameworks, or services mentioned
 - Return empty array if none
+- If a tool or product name appears to be a phonetic Russian transliteration of an English name (e.g. "стич" → "Stitch", "антигравити" → "Antigravity", "опол" → "Opal"), restore the correct English spelling. Always output tool names in their original language (usually English).
+- For GitHub projects, reconstruct the correct repo name if it was phonetically transcribed.
 
 Tags:
 - Generate 3-5 relevant tags

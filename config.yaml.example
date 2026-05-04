@@ -41,3 +41,10 @@ vision:
     # Omit api_key to reuse llm.anthropic.api_key automatically
     api_key: "YOUR_ANTHROPIC_API_KEY"
     model: "claude-haiku-4-5-20251001"
+
+search:
+  enabled: true         # enable URL lookup for tools and GitHub projects
+  backend: duckduckgo   # duckduckgo (default, no key needed) | brave
+
+  brave:
+    api_key: ""         # optional — set or use BRAVE_API_KEY env var

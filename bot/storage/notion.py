@@ -82,8 +82,11 @@ def _build_properties(entry: KnowledgeEntry) -> dict[str, Any]:
         props["Tags"] = {"multi_select": [{"name": t} for t in entry.tags[:10]]}
 
     if entry.tools:
+        tool_names = [
+            t["name"] if isinstance(t, dict) else t for t in entry.tools[:20]
+        ]
         props["Tools"] = {
-            "rich_text": [{"text": {"content": ", ".join(entry.tools[:20])}}]
+            "rich_text": [{"text": {"content": ", ".join(tool_names)}}]
         }
 
     return props
@@ -150,7 +153,13 @@ def _build_children(entry: KnowledgeEntry) -> list[dict[str, Any]]:
     if entry.tools:
         blocks.append(heading("Tools Mentioned"))
         for tool in entry.tools:
-            blocks.append(bullet(tool))
+            if isinstance(tool, dict):
+                name = tool.get("name", "")
+                url = tool.get("url")
+                text = f"{name} — {url}" if url else name
+                blocks.append(bullet(text))
+            else:
+                blocks.append(bullet(tool))
 
     if entry.raw_transcript:
         blocks.append(heading("Transcript"))

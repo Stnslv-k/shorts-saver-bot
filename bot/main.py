@@ -98,6 +98,7 @@ async def handle_url(message: Message, bot_state: BotState) -> None:
             bot_state.llm_backend,  # type: ignore[arg-type]
             bot_state.storage_backend,  # type: ignore[arg-type]
             bot_state.vision_backend,
+            bot_state.search_backend,
         )
 
         # Save to local history
