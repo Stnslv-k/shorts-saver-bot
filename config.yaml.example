@@ -1,0 +1,43 @@
+bot:
+  token: "YOUR_TELEGRAM_BOT_TOKEN"
+  password: "YOUR_SECRET_PASSWORD"
+
+llm:
+  backend: ollama       # ollama | openai | anthropic
+  fallback: openai      # optional — used if primary backend fails
+
+  ollama:
+    url: "http://localhost:11434"
+    model: "llama3.1:8b"
+
+  openai:
+    api_key: "YOUR_OPENAI_API_KEY"
+    model: "gpt-4o-mini"
+
+  anthropic:
+    api_key: "YOUR_ANTHROPIC_API_KEY"
+    model: "claude-haiku-4-5-20251001"
+
+storage:
+  backend: notion       # notion | obsidian
+
+  notion:
+    api_key: "YOUR_NOTION_INTEGRATION_TOKEN"
+    database_id: "YOUR_NOTION_DATABASE_ID"
+
+  obsidian:
+    vault_path: "/path/to/your/vault/YouTube Shorts"
+
+vision:
+  enabled: false        # set to true to enable keyframe analysis
+  backend: openai       # openai | anthropic
+
+  openai:
+    # Omit api_key to reuse llm.openai.api_key automatically
+    api_key: "YOUR_OPENAI_API_KEY"
+    model: "gpt-4o"
+
+  anthropic:
+    # Omit api_key to reuse llm.anthropic.api_key automatically
+    api_key: "YOUR_ANTHROPIC_API_KEY"
+    model: "claude-haiku-4-5-20251001"
