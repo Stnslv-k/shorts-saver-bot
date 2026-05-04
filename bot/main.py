@@ -3,21 +3,20 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from pathlib import Path
 
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandStart
+from aiogram import Bot, Dispatcher
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message
 
 from bot.auth import authenticate_user, init_db, is_authenticated
-from bot.config import load_config
-from bot.llm import build_llm_backend
+from bot.config import apply_db_settings, load_config
 from bot.processor import process_url
-from bot.storage import build_storage_backend
-from bot.vision import build_vision_backend
+from bot.settings_db import add_history_entry, get_all_settings, init_settings_db
+from bot.setup import create_setup_router, entry_inline_kb
+from bot.state import BotState
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,16 +63,11 @@ async def handle_password(
         await message.answer("Incorrect password. Try again.")
 
 
-async def handle_url(
-    message: Message,
-    llm_backend,
-    storage_backend,
-    vision_backend=None,
-) -> None:
+async def handle_url(message: Message, bot_state: BotState) -> None:
     user_id = message.from_user.id  # type: ignore[union-attr]
 
     if not await is_authenticated(user_id):
-        return  # silently ignore
+        return
 
     text = message.text or message.caption or ""
     url_match = YOUTUBE_SHORTS_RE.search(text)
@@ -85,49 +79,54 @@ async def handle_url(
         )
         return
 
+    if not bot_state.is_ready():
+        await message.answer(
+            "⚙️ Настройки не завершены. Используй /setup для настройки."
+        )
+        return
+
     url = url_match.group(0)
-    vision_note = escape_md(" (with visual analysis)") if vision_backend is not None else ""
+    vision_note = escape_md(" (with visual analysis)") if bot_state.vision_backend is not None else ""
     processing_msg = await message.answer(
         f"Processing{vision_note}\\.\\.\\. this may take a moment\\.",
         parse_mode="MarkdownV2",
     )
 
     try:
-        entry, confirmation = await process_url(url, llm_backend, storage_backend, vision_backend)
+        entry, confirmation, storage_ref = await process_url(
+            url,
+            bot_state.llm_backend,  # type: ignore[arg-type]
+            bot_state.storage_backend,  # type: ignore[arg-type]
+            bot_state.vision_backend,
+        )
 
+        # Save to local history
+        history_id = await add_history_entry(
+            title=entry.title,
+            category=entry.category,
+            summary=entry.summary,
+            source_url=entry.source_url,
+            tags=entry.tags,
+            storage_ref=storage_ref,
+        )
+
+        tag_str = " ".join(f"#{t}" for t in entry.tags) if entry.tags else ""
         lines = [
-            f"*{escape_md(entry.title)}*",
-            f"Category: `{escape_md(entry.category)}`",
-            "",
-            escape_md(entry.summary),
+            "✅ Сохранено!\n",
+            f"📌 <b>{entry.title}</b>",
+            f"📁 Категория: <code>{entry.category}</code>",
         ]
+        if tag_str:
+            lines.append(f"🏷 {tag_str}")
+        if entry.summary:
+            lines.append(f"\n<i>{entry.summary[:300]}</i>")
 
-        if entry.tags:
-            # Tags rendered as inline code spans; backticks in tag text would break the
-            # span, so strip them before wrapping.
-            tag_str = " ".join(f"`{t.replace('`', '')}`" for t in entry.tags)
-            lines.append(f"Tags: {tag_str}")
-
-        if entry.tools:
-            tools_str = escape_md(", ".join(entry.tools[:5]))
-            lines.append(f"Tools: {tools_str}")
-
-        if entry.github_repos:
-            repo_lines = []
-            for repo in entry.github_repos[:3]:
-                name = escape_md(repo.get("name", ""))
-                repo_url = _escape_link_url(repo.get("url", ""))
-                if repo_url:
-                    repo_lines.append(f"[{name}]({repo_url})")
-                else:
-                    repo_lines.append(name)
-            lines.append("GitHub: " + ", ".join(repo_lines))
-
-        lines.append("")
-        lines.append(f"_{escape_md(confirmation)}_")
-
-        reply = "\n".join(lines)
-        await processing_msg.edit_text(reply, parse_mode="MarkdownV2")
+        kb = entry_inline_kb(history_id, entry.source_url)
+        await processing_msg.edit_text(
+            "\n".join(lines),
+            reply_markup=kb,
+            parse_mode="HTML",
+        )
 
     except Exception as e:
         logger.exception("Failed to process URL %s", url)
@@ -140,9 +139,7 @@ async def handle_text(
     message: Message,
     state: FSMContext,
     password: str,
-    llm_backend,
-    storage_backend,
-    vision_backend=None,
+    bot_state: BotState,
 ) -> None:
     user_id = message.from_user.id  # type: ignore[union-attr]
 
@@ -156,7 +153,7 @@ async def handle_text(
 
     text = message.text or ""
     if YOUTUBE_SHORTS_RE.search(text):
-        await handle_url(message, llm_backend, storage_backend, vision_backend)
+        await handle_url(message, bot_state)
     else:
         await message.answer(
             "Send me a YouTube Shorts URL to extract knowledge from it."
@@ -164,49 +161,50 @@ async def handle_text(
 
 
 def escape_md(text: str) -> str:
-    """Escape special characters for Telegram MarkdownV2."""
     special = r"\_*[]()~`>#+-=|{}.!"
     return "".join(f"\\{c}" if c in special else c for c in str(text))
 
 
-def _escape_link_url(url: str) -> str:
-    """Escape characters inside the (...) part of a MarkdownV2 inline link.
-
-    Per Telegram spec, only ')' and '\\' must be escaped inside link URLs.
-    """
-    return url.replace("\\", "\\\\").replace(")", "\\)")
-
-
 def main() -> None:
-    config_path = Path("config.yaml")
-    if not config_path.exists():
-        logger.error("config.yaml not found. Copy config.yaml.example and fill in your values.")
-        sys.exit(1)
-
-    config = load_config(config_path)
+    config = load_config("config.yaml")
 
     if not config.bot.token:
-        logger.error("Bot token is not set in config.yaml")
+        logger.error(
+            "Bot token is not set. Provide BOT_TOKEN env var or set bot.token in config.yaml."
+        )
         sys.exit(1)
 
     if not config.bot.password:
-        logger.error("Bot password is not set in config.yaml")
+        logger.error(
+            "Bot password is not set. Provide BOT_PASSWORD env var or set bot.password in config.yaml."
+        )
         sys.exit(1)
 
     import asyncio
 
     async def _run() -> None:
         await init_db()
+        await init_settings_db()
 
-        llm_backend = build_llm_backend(config.llm)
-        storage_backend = build_storage_backend(config.storage)
+        # Overlay DB settings (fills in what env vars + yaml didn't cover)
+        db_settings = await get_all_settings()
+        apply_db_settings(config, db_settings)
 
-        vision_backend = None
-        if config.vision.enabled:
-            vision_backend = build_vision_backend(config.vision)
-            logger.info("Vision enabled: backend=%s", config.vision.backend)
+        bot_state = BotState(config=config)
+        bot_state.rebuild_backends()
+
+        if not bot_state.is_ready():
+            logger.warning(
+                "Bot started without complete configuration. "
+                "Users will be prompted to run /setup."
+            )
         else:
-            logger.info("Vision disabled")
+            logger.info(
+                "Backends ready: LLM=%s storage=%s vision=%s",
+                config.llm.backend,
+                config.storage.backend,
+                "enabled" if config.vision.enabled else "disabled",
+            )
 
         bot = Bot(token=config.bot.token)
         storage = MemoryStorage()
@@ -214,23 +212,25 @@ def main() -> None:
 
         password = config.bot.password
 
-        # /start handler
+        # Setup router must be included before the catch-all handler so that
+        # its state-filtered handlers take priority.
+        setup_router = create_setup_router(bot_state)
+        dp.include_router(setup_router)
+
         @dp.message(CommandStart())
         async def _start(msg: Message, state: FSMContext) -> None:
             await cmd_start(msg, state, password)
 
-        # Password entry state handler — must be registered before the catch-all
         @dp.message(AuthState.waiting_for_password)
         async def _pw(msg: Message, state: FSMContext) -> None:
             await handle_password(msg, state, password)
 
-        # All other messages
         @dp.message()
         async def _text(msg: Message, state: FSMContext) -> None:
-            await handle_text(msg, state, password, llm_backend, storage_backend, vision_backend)
+            await handle_text(msg, state, password, bot_state)
 
         logger.info("Bot starting...")
-        await dp.start_polling(bot, allowed_updates=["message"])
+        await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
 
     asyncio.run(_run())
 

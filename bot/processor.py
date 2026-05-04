@@ -20,10 +20,10 @@ async def process_url(
     llm: LLMBackend,
     storage: StorageBackend,
     vision: "VisionBackend | None" = None,
-) -> tuple[KnowledgeEntry, str]:
+) -> tuple[KnowledgeEntry, str, str]:
     """
     Full pipeline: URL → transcript (+ optional vision) → LLM extraction → storage.
-    Returns (entry, storage_confirmation_message).
+    Returns (entry, confirmation_message, storage_ref).
     """
     combined_input = await _build_llm_input(url, vision)
     logger.info("LLM input ready (%d chars) for %s", len(combined_input), url)
@@ -34,8 +34,8 @@ async def process_url(
     # Store only the raw audio transcript in the entry, not the combined prompt
     raw_transcript = _extract_transcript_section(combined_input)
     entry = KnowledgeEntry.from_extraction(result, source_url=url, raw_transcript=raw_transcript)
-    confirmation = await storage.save(entry)
-    return entry, confirmation
+    confirmation, storage_ref = await storage.save(entry)
+    return entry, confirmation, storage_ref
 
 
 async def _build_llm_input(url: str, vision: "VisionBackend | None") -> str:

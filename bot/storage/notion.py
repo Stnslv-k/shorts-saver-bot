@@ -25,7 +25,7 @@ class NotionAdapter(StorageBackend):
         self._client = AsyncClient(auth=config.api_key)
         self._db_id = config.database_id
 
-    async def save(self, entry: KnowledgeEntry) -> str:
+    async def save(self, entry: KnowledgeEntry) -> tuple[str, str]:
         properties = _build_properties(entry)
         children = _build_children(entry)
 
@@ -35,9 +35,19 @@ class NotionAdapter(StorageBackend):
             children=children,
         )
 
+        page_id = response.get("id", "")
         page_url = response.get("url", "")
         logger.info("Notion page created: %s", page_url)
-        return f"Notion page created: {page_url}"
+        return f"Notion page created: {page_url}", page_id
+
+    async def delete_by_ref(self, ref: str) -> bool:
+        try:
+            await self._client.pages.update(page_id=ref, archived=True)
+            logger.info("Notion page archived: %s", ref)
+            return True
+        except Exception as e:
+            logger.warning("Failed to archive Notion page %s: %s", ref, e)
+            return False
 
     async def list_recent(self, n: int = 5) -> list[KnowledgeEntry]:
         response = await self._client.databases.query(
