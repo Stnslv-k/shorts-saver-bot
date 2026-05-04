@@ -108,6 +108,15 @@ async def get_history_entry(entry_id: int) -> dict | None:
             return dict(row) if row else None
 
 
+async def get_ui_lang() -> str:
+    val = await get_setting("ui_lang")
+    return val if val in ("en", "ru") else "en"
+
+
+async def set_ui_lang(lang: str) -> None:
+    await set_setting("ui_lang", lang)
+
+
 async def delete_history_entry(entry_id: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("DELETE FROM history WHERE id = ?", (entry_id,))

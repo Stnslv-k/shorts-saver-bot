@@ -14,8 +14,8 @@ class BraveSearchBackend(SearchBackend):
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
 
-    async def find_url(self, tool_name: str, context: str = "") -> str | None:
-        query = build_query(tool_name, context)
+    async def find_url(self, tool_name: str, context: str = "", video_context: str = "") -> str | None:
+        query = build_query(tool_name, context, video_context)
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(

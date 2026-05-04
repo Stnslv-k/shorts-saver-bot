@@ -37,7 +37,11 @@ def pick_best_url(urls: list[str]) -> str | None:
     return candidates[0] if candidates else None
 
 
-def build_query(tool_name: str, context: str) -> str:
+def build_query(tool_name: str, context: str = "", video_context: str = "") -> str:
+    parts = [f'"{tool_name}"']
+    if video_context:
+        parts.append(video_context)
     if context:
-        return f'"{tool_name}" {context} official site'
-    return f'"{tool_name}" developer tool official site'
+        parts.append(context)
+    parts.append("official site")
+    return " ".join(parts)
