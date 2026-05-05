@@ -32,7 +32,7 @@ class AnthropicAdapter(LLMBackend):
         logger.debug("Anthropic raw response: %s", raw_text[:200])
 
         parsed = _parse_json_response(raw_text)
-        return ExtractionResult.from_dict(parsed)
+        return ExtractionResult.from_dict(parsed), self._model
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:

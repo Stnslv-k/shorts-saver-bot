@@ -23,16 +23,16 @@ async def process_url(
     storage: StorageBackend,
     vision: "VisionBackend | None" = None,
     search: "SearchBackend | None" = None,
-) -> tuple[KnowledgeEntry, str, str]:
+) -> tuple[KnowledgeEntry, str, str, str]:
     """
     Full pipeline: URL → transcript (+ optional vision) → LLM extraction → storage.
-    Returns (entry, confirmation_message, storage_ref).
+    Returns (entry, confirmation_message, storage_ref, model_name).
     """
     combined_input = await _build_llm_input(url, vision)
     logger.info("LLM input ready (%d chars) for %s", len(combined_input), url)
 
-    result = await llm.extract(combined_input)
-    logger.info("Extracted: category=%s title=%r", result.category, result.title)
+    result, model_name = await llm.extract(combined_input)
+    logger.info("Extracted: category=%s title=%r model=%s", result.category, result.title, model_name)
 
     if search is not None:
         result = await _enrich_with_urls(result, search)
@@ -41,7 +41,7 @@ async def process_url(
     raw_transcript = _extract_transcript_section(combined_input)
     entry = KnowledgeEntry.from_extraction(result, source_url=url, raw_transcript=raw_transcript)
     confirmation, storage_ref = await storage.save(entry)
-    return entry, confirmation, storage_ref
+    return entry, confirmation, storage_ref, model_name
 
 
 async def _already(value: str | None) -> str | None:
