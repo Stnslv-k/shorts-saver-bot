@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from bot.search._filters import build_query, pick_best_url
+from bot.search._filters import GOOGLE_SITE_QUERY, build_query, is_google_context, pick_best_url
 from bot.search.base import SearchBackend
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,19 @@ class DuckDuckGoBackend(SearchBackend):
             from duckduckgo_search import DDGS
 
             loop = asyncio.get_event_loop()
+
+            # For Google-context tools try site-restricted search first.
+            if is_google_context(video_context):
+                google_query = f'"{tool_name}" {GOOGLE_SITE_QUERY}'
+                results = await loop.run_in_executor(
+                    None,
+                    lambda: list(DDGS().text(google_query, max_results=5)),
+                )
+                url = pick_best_url([r["href"] for r in results])
+                if url:
+                    return url
+                await asyncio.sleep(0.5)
+
             results = await loop.run_in_executor(
                 None,
                 lambda: list(DDGS().text(query, max_results=5)),

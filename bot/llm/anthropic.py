@@ -18,7 +18,7 @@ class AnthropicAdapter(LLMBackend):
         self._client = anthropic.AsyncAnthropic(api_key=config.api_key)
         self._model = config.model
 
-    async def extract(self, transcript: str) -> ExtractionResult:
+    async def extract(self, transcript: str) -> tuple[ExtractionResult, str]:
         prompt = EXTRACTION_PROMPT.replace("{transcript}", transcript)
 
         message = await self._client.messages.create(
