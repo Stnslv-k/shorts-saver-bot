@@ -29,7 +29,7 @@ class BraveSearchBackend(SearchBackend):
                 )
                 data = resp.json()
                 results = data.get("web", {}).get("results", [])
-                return pick_best_url([r["url"] for r in results])
+                return pick_best_url([r["url"] for r in results], tool_name)
         except Exception as e:
             logger.warning("Brave search failed for '%s': %s", tool_name, e)
         return None
