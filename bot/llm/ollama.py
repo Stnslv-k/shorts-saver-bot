@@ -18,7 +18,7 @@ class OllamaAdapter(LLMBackend):
         self._url = config.url.rstrip("/")
         self._model = config.model
 
-    async def extract(self, transcript: str) -> ExtractionResult:
+    async def extract(self, transcript: str) -> tuple[ExtractionResult, str]:
         prompt = EXTRACTION_PROMPT.replace("{transcript}", transcript)
 
         payload: dict[str, Any] = {

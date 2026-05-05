@@ -18,7 +18,7 @@ class OpenAIAdapter(LLMBackend):
         self._client = AsyncOpenAI(api_key=config.api_key)
         self._model = config.model
 
-    async def extract(self, transcript: str) -> ExtractionResult:
+    async def extract(self, transcript: str) -> tuple[ExtractionResult, str]:
         prompt = EXTRACTION_PROMPT.replace("{transcript}", transcript)
 
         response = await self._client.chat.completions.create(
