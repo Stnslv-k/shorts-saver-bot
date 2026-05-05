@@ -85,7 +85,7 @@ async def handle_url(message: Message, bot_state: BotState) -> None:
     processing_msg = await message.answer(t(processing_key, lang))
 
     try:
-        entry, confirmation, storage_ref = await process_url(
+        entry, confirmation, storage_ref, model_name = await process_url(
             url,
             bot_state.llm_backend,  # type: ignore[arg-type]
             bot_state.storage_backend,  # type: ignore[arg-type]
@@ -113,6 +113,7 @@ async def handle_url(message: Message, bot_state: BotState) -> None:
             lines.append(f"🏷 {tag_str}")
         if entry.summary:
             lines.append(f"\n<i>{entry.summary[:300]}</i>")
+        lines.append(f"\n🤖 <code>{model_name}</code>")
 
         kb = entry_inline_kb(history_id, entry.source_url, lang)
         await processing_msg.edit_text(

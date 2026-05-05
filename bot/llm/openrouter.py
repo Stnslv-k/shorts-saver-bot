@@ -62,7 +62,7 @@ async def _get_models(api_key: str, max_models: int) -> tuple[list[str], str]:
     return _cache.models, _cache.fallback_id
 
 
-async def _call_openrouter(api_key: str, model_id: str, prompt: str) -> ExtractionResult:
+async def _call_openrouter(api_key: str, model_id: str, prompt: str) -> tuple[ExtractionResult, str]:
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{OPENROUTER_BASE}/chat/completions",
@@ -84,8 +84,10 @@ async def _call_openrouter(api_key: str, model_id: str, prompt: str) -> Extracti
             raise _RateLimitError(f"Rate limited on {model_id}")
         resp.raise_for_status()
 
-        content = resp.json()["choices"][0]["message"]["content"]
-        return ExtractionResult.from_dict(json.loads(content))
+        body = resp.json()
+        actual_model = body.get("model") or model_id
+        content = body["choices"][0]["message"]["content"]
+        return ExtractionResult.from_dict(json.loads(content)), actual_model
 
 
 class OpenRouterSmartBackend(LLMBackend):
@@ -96,24 +98,24 @@ class OpenRouterSmartBackend(LLMBackend):
         self._fallback = fallback
         self._max = max_free_models
 
-    async def extract(self, transcript: str) -> ExtractionResult:
+    async def extract(self, transcript: str) -> tuple[ExtractionResult, str]:
         prompt = EXTRACTION_PROMPT.replace("{transcript}", transcript)
         models, managed_fallback = await _get_models(self._api_key, self._max)
 
         for model_id in models:
             try:
-                result = await _call_openrouter(self._api_key, model_id, prompt)
-                logger.info("OpenRouter: success with %s", model_id)
-                return result
+                result, model_name = await _call_openrouter(self._api_key, model_id, prompt)
+                logger.info("OpenRouter: success with %s", model_name)
+                return result, model_name
             except _RateLimitError:
                 logger.warning("OpenRouter: rate limited on %s, trying next", model_id)
             except Exception as e:
                 logger.warning("OpenRouter: %s failed (%s), trying next", model_id, e)
 
         try:
-            result = await _call_openrouter(self._api_key, managed_fallback, prompt)
-            logger.info("OpenRouter: success with managed fallback %s", managed_fallback)
-            return result
+            result, model_name = await _call_openrouter(self._api_key, managed_fallback, prompt)
+            logger.info("OpenRouter: success with managed fallback %s", model_name)
+            return result, model_name
         except Exception as e:
             logger.warning("OpenRouter: managed fallback failed (%s), using configured fallback", e)
 

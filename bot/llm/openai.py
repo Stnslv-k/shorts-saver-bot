@@ -32,4 +32,4 @@ class OpenAIAdapter(LLMBackend):
         logger.debug("OpenAI raw response: %s", raw_text[:200])
 
         parsed: dict[str, Any] = json.loads(raw_text)
-        return ExtractionResult.from_dict(parsed)
+        return ExtractionResult.from_dict(parsed), self._model

@@ -59,6 +59,6 @@ Transcript:
 
 class LLMBackend(ABC):
     @abstractmethod
-    async def extract(self, transcript: str) -> ExtractionResult:
-        """Extract structured data from a transcript."""
+    async def extract(self, transcript: str) -> tuple[ExtractionResult, str]:
+        """Extract structured data from a transcript. Returns (result, model_name)."""
         ...
