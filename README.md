@@ -81,8 +81,51 @@ The LLM receives the full transcript and returns structured JSON:
 | Ollama | `llm.ollama` | Local, free. Needs Ollama running |
 | OpenAI | `llm.openai` | GPT-4o-mini is cost-effective |
 | Anthropic | `llm.anthropic` | Claude Haiku is fast and cheap |
+| OpenRouter | `llm.openrouter` | Free models first — see below |
 
 Set `llm.fallback` to a second backend so extraction never silently fails.
+
+## Cost Optimization with OpenRouter
+
+[OpenRouter](https://openrouter.ai) aggregates hundreds of LLM providers and exposes a number of genuinely free models — no credit card required.
+
+### How the smart backend works
+
+1. On first use, the bot fetches the current free-model rankings from [`shir-man.com/api/free-llm/top-models`](https://shir-man.com/api/free-llm/top-models) and caches the list for 1 hour.
+2. It filters to models where `healthStatus == "passed"` **and** `supportsResponseFormat == true` (JSON mode — required for reliable extraction).
+3. It tries the top `max_free_models` (default 3) in rank order.
+4. On rate limit (HTTP 429) or any error, it silently moves to the next model.
+5. If all ranked models fail, it tries `openrouter/free` — OpenRouter's own managed free router.
+6. If that also fails, it falls back to whichever backend is set in `llm.fallback` (e.g. `gpt-4o-mini`).
+
+### Setup
+
+1. Register at <https://openrouter.ai> and create an API key — it's free.
+2. In `config.yaml`:
+
+```yaml
+llm:
+  backend: openrouter
+  fallback: openai      # paid safety net when all free models are busy
+
+  openrouter:
+    api_key: "sk-or-YOUR_KEY"
+    max_free_models: 3
+
+  openai:
+    api_key: "YOUR_OPENAI_API_KEY"
+    model: "gpt-4o-mini"
+```
+
+### Cost comparison
+
+| Path | Cost per Short |
+|------|---------------|
+| Free OpenRouter model (success) | $0 |
+| OpenRouter managed free (`openrouter/free`) | $0 |
+| GPT-4o-mini fallback | ~$0.005–0.01 |
+
+In practice the free path succeeds the vast majority of the time during off-peak hours. The paid fallback is a safety net for burst rate limiting.
 
 ## Storage backends
 

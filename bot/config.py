@@ -27,12 +27,19 @@ class AnthropicConfig:
 
 
 @dataclass
+class OpenRouterConfig:
+    api_key: str = ""
+    max_free_models: int = 3
+
+
+@dataclass
 class LLMConfig:
     backend: str = "ollama"
     fallback: str | None = None
     ollama: OllamaConfig = field(default_factory=OllamaConfig)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     anthropic: AnthropicConfig = field(default_factory=AnthropicConfig)
+    openrouter: OpenRouterConfig = field(default_factory=OpenRouterConfig)
 
 
 @dataclass
@@ -99,6 +106,7 @@ def _parse_llm(raw: dict[str, Any]) -> LLMConfig:
     ollama_raw = raw.get("ollama", {})
     openai_raw = raw.get("openai", {})
     anthropic_raw = raw.get("anthropic", {})
+    openrouter_raw = raw.get("openrouter", {})
     return LLMConfig(
         backend=os.getenv("LLM_BACKEND", raw.get("backend", "ollama")),
         fallback=raw.get("fallback"),
@@ -113,6 +121,10 @@ def _parse_llm(raw: dict[str, Any]) -> LLMConfig:
         anthropic=AnthropicConfig(
             api_key=os.getenv("ANTHROPIC_API_KEY", anthropic_raw.get("api_key", "")),
             model=anthropic_raw.get("model", "claude-haiku-4-5-20251001"),
+        ),
+        openrouter=OpenRouterConfig(
+            api_key=os.getenv("OPENROUTER_API_KEY", openrouter_raw.get("api_key", "")),
+            max_free_models=openrouter_raw.get("max_free_models", 3),
         ),
     )
 

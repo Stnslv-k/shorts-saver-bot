@@ -3,9 +3,21 @@ from bot.llm.anthropic import AnthropicAdapter
 from bot.llm.base import LLMBackend
 from bot.llm.ollama import OllamaAdapter
 from bot.llm.openai import OpenAIAdapter
+from bot.llm.openrouter import OpenRouterSmartBackend
 
 
 def build_llm_backend(config: LLMConfig) -> LLMBackend:
+    if config.backend == "openrouter":
+        if not config.openrouter.api_key:
+            raise ValueError("openrouter.api_key is required when backend is 'openrouter'")
+        fallback_name = config.fallback or "openai"
+        fallback = _make_backend(fallback_name, config)
+        return OpenRouterSmartBackend(
+            api_key=config.openrouter.api_key,
+            fallback=fallback,
+            max_free_models=config.openrouter.max_free_models,
+        )
+
     primary = _make_backend(config.backend, config)
     if config.fallback:
         fallback = _make_backend(config.fallback, config)

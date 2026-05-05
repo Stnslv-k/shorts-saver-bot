@@ -3,8 +3,8 @@ bot:
   password: "YOUR_SECRET_PASSWORD"
 
 llm:
-  backend: ollama       # ollama | openai | anthropic
-  fallback: openai      # optional — used if primary backend fails
+  backend: ollama       # ollama | openai | anthropic | openrouter
+  fallback: openai      # optional — used if primary backend fails (for openrouter: used when all free models fail)
 
   ollama:
     url: "http://localhost:11434"
@@ -17,6 +17,13 @@ llm:
   anthropic:
     api_key: "YOUR_ANTHROPIC_API_KEY"
     model: "claude-haiku-4-5-20251001"
+
+  # OpenRouter — tries free models first, then falls back to the backend above
+  # Get a free API key at: https://openrouter.ai/settings/keys (no credit card required)
+  # Free models are ranked daily by: https://shir-man.com/api/free-llm/top-models
+  openrouter:
+    api_key: "sk-or-YOUR_KEY"
+    max_free_models: 3  # how many top free models to try before falling back
 
 storage:
   backend: notion       # notion | obsidian
