@@ -39,6 +39,7 @@ _CMD_RE = re.compile(r"^/\w+(@\w+)?$")
 class SetupState(StatesGroup):
     waiting_llm_openai_key = State()
     waiting_llm_anthropic_key = State()
+    waiting_llm_openrouter_key = State()
     waiting_llm_ollama_url = State()
     waiting_storage_notion_key = State()
     waiting_storage_notion_db_id = State()
@@ -75,7 +76,10 @@ def _llm_menu_kb(current: str, lang: str = LANG_EN) -> InlineKeyboardMarkup:
             [
                 _b("Ollama", "ollama", "su:l:ol"),
                 _b("OpenAI", "openai", "su:l:oa"),
+            ],
+            [
                 _b("Anthropic", "anthropic", "su:l:an"),
+                _b("OpenRouter", "openrouter", "su:l:or"),
             ],
             [InlineKeyboardButton(text=t("btn_back", lang), callback_data="su:m")],
         ]
@@ -147,6 +151,7 @@ async def _status_text(bot_state: BotState, lang: str = LANG_EN) -> str:
     llm_backend = settings.get("llm.backend", cfg.llm.backend)
     openai_key = settings.get("llm.openai.api_key") or cfg.llm.openai.api_key
     anthropic_key = settings.get("llm.anthropic.api_key") or cfg.llm.anthropic.api_key
+    openrouter_key = settings.get("llm.openrouter.api_key") or cfg.llm.openrouter.api_key
     ollama_url = settings.get("llm.ollama.url") or cfg.llm.ollama.url
 
     storage_backend = settings.get("storage.backend", cfg.storage.backend)
@@ -165,6 +170,7 @@ async def _status_text(bot_state: BotState, lang: str = LANG_EN) -> str:
             f"🤖 <b>LLM:</b> {llm_backend}\n"
             f"  OpenAI key: {_mask(openai_key)}\n"
             f"  Anthropic key: {_mask(anthropic_key)}\n"
+            f"  OpenRouter key: {_mask(openrouter_key)}\n"
             f"  Ollama URL: {ollama_url or not_set}\n\n"
             f"💾 <b>Хранилище:</b> {storage_backend}\n"
             f"  Notion key: {_mask(notion_key)}\n"
@@ -180,6 +186,7 @@ async def _status_text(bot_state: BotState, lang: str = LANG_EN) -> str:
             f"🤖 <b>LLM:</b> {llm_backend}\n"
             f"  OpenAI key: {_mask(openai_key)}\n"
             f"  Anthropic key: {_mask(anthropic_key)}\n"
+            f"  OpenRouter key: {_mask(openrouter_key)}\n"
             f"  Ollama URL: {ollama_url or not_set}\n\n"
             f"💾 <b>Storage:</b> {storage_backend}\n"
             f"  Notion key: {_mask(notion_key)}\n"
@@ -373,6 +380,20 @@ def create_setup_router(bot_state: BotState) -> Router:
         await callback.message.edit_text(f"🔑 {prompt}", parse_mode="HTML")  # type: ignore[union-attr]
         await callback.answer()
 
+    @router.callback_query(lambda c: c.data == "su:l:or")
+    async def cb_llm_openrouter(callback: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_ui_lang()
+        await set_setting("llm.backend", "openrouter")
+        bot_state.config.llm.backend = "openrouter"
+        await state.set_state(SetupState.waiting_llm_openrouter_key)
+        prompt = (
+            "Enter <b>OpenRouter API key</b>:"
+            if lang == LANG_EN
+            else "Введи <b>OpenRouter API key</b>:"
+        )
+        await callback.message.edit_text(f"🔑 {prompt}", parse_mode="HTML")  # type: ignore[union-attr]
+        await callback.answer()
+
     # ---- LLM state handlers ----
 
     @router.message(SetupState.waiting_llm_openai_key)
@@ -403,6 +424,29 @@ def create_setup_router(bot_state: BotState) -> Router:
             bot_state.config.llm.anthropic.api_key = text
             bot_state.rebuild_backends()
             saved_msg = f"✅ Anthropic key saved: {_mask(text)}" if lang == LANG_EN else f"✅ Anthropic key сохранён: {_mask(text)}"
+            await message.answer(saved_msg)
+        await state.clear()
+        settings = await get_all_settings()
+        backend = settings.get("llm.backend", bot_state.config.llm.backend)
+        await message.answer(
+            f"🤖 <b>LLM Backend: {backend}</b>",
+            reply_markup=_llm_menu_kb(backend, lang),
+            parse_mode="HTML",
+        )
+
+    @router.message(SetupState.waiting_llm_openrouter_key)
+    async def recv_openrouter_key(message: Message, state: FSMContext) -> None:
+        lang = await get_ui_lang()
+        text = (message.text or "").strip()
+        if text and not _is_command(text):
+            await set_setting("llm.openrouter.api_key", text)
+            bot_state.config.llm.openrouter.api_key = text
+            bot_state.rebuild_backends()
+            saved_msg = (
+                f"✅ OpenRouter key saved: {_mask(text)}"
+                if lang == LANG_EN
+                else f"✅ OpenRouter key сохранён: {_mask(text)}"
+            )
             await message.answer(saved_msg)
         await state.clear()
         settings = await get_all_settings()

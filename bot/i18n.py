@@ -13,6 +13,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "processing_vision": "⏳ Processing (with visual analysis)...",
         "saved": "✅ Saved!",
         "error": "❌ Failed to process. Please try again.",
+        "error_no_transcript": (
+            "❌ I couldn't extract usable content from this Short. "
+            "Try another link, or enable Vision in /setup for videos with important on-screen text."
+        ),
         "settings_menu": "⚙️ Settings",
         "status_title": "📊 Current config",
         "history_title": "📋 Recent entries",
@@ -43,6 +47,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "processing_vision": "⏳ Обрабатываю (с анализом видео)...",
         "saved": "✅ Сохранено!",
         "error": "❌ Не удалось обработать. Попробуй ещё раз.",
+        "error_no_transcript": (
+            "❌ Не удалось извлечь содержимое из этого Short. "
+            "Попробуй другую ссылку или включи Vision в /setup для видео с важным текстом на экране."
+        ),
         "settings_menu": "⚙️ Настройки",
         "status_title": "📊 Текущая конфигурация",
         "history_title": "📋 Последние записи",

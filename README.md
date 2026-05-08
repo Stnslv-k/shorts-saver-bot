@@ -2,27 +2,45 @@
 
 A Telegram bot that processes YouTube Shorts links, extracts structured knowledge with an LLM, and saves it to Notion or Obsidian.
 
+## What it does
+
+1. Send a YouTube Shorts URL to your private Telegram bot.
+2. The bot fetches captions or downloads audio and transcribes it locally with Whisper.
+3. Optional Vision support analyzes keyframes when the important content is on screen.
+4. An LLM extracts a structured knowledge entry.
+5. The entry is saved to Notion or an Obsidian-compatible Markdown folder.
+
+## Requirements
+
+- Python 3.11+
+- `ffmpeg` and `ffprobe`
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- At least one LLM backend: Ollama, OpenAI, Anthropic, or OpenRouter
+- One storage backend: Notion database or an Obsidian vault path
+
 ## Quick start
 
-### 1. Install dependencies
+### 1. Install system dependencies
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-`ffmpeg` must also be installed on the host for the yt-dlp fallback:
+`ffmpeg` must be installed for fallback audio download/transcription and Vision keyframe extraction:
 
 ```bash
 # macOS
 brew install ffmpeg
 
 # Debian/Ubuntu
-sudo apt-get install ffmpeg
+sudo apt-get update && sudo apt-get install -y ffmpeg
 ```
 
-### 2. Configure
+### 2. Install Python dependencies
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+```
+
+### 3. Configure
 
 ```bash
 cp config.yaml.example config.yaml
@@ -34,21 +52,56 @@ Edit `config.yaml` with your credentials:
 |-----|-------------|
 | `bot.token` | Telegram bot token from [@BotFather](https://t.me/BotFather) |
 | `bot.password` | Shared password users must enter once |
-| `llm.backend` | `ollama`, `openai`, or `anthropic` |
+| `llm.backend` | `ollama`, `openai`, `anthropic`, or `openrouter` |
 | `llm.fallback` | Optional secondary backend if primary fails |
 | `storage.backend` | `notion` or `obsidian` |
 
-### 3. Run
+You can also start with only `bot.token` and `bot.password`, then configure the rest from Telegram with `/setup`.
+
+### 4. Run locally
 
 ```bash
-python -m bot.main
+python3 -m bot.main
 ```
 
-Or with Docker:
+### 5. Run with Docker
 
 ```bash
 docker compose up -d
 ```
+
+The compose file mounts `./config.yaml` and `./data`. For Obsidian, uncomment the optional vault mount in `docker-compose.yml` and set `storage.obsidian.vault_path` to the matching container path, for example `/vault`.
+
+## Configuration examples
+
+### Fully local LLM with Ollama
+
+```yaml
+llm:
+  backend: ollama
+  fallback: null
+  ollama:
+    url: "http://host.docker.internal:11434"
+    model: "llama3.1:8b"
+```
+
+### OpenRouter free models with paid fallback
+
+```yaml
+llm:
+  backend: openrouter
+  fallback: openai
+
+  openrouter:
+    api_key: "sk-or-YOUR_KEY"
+    max_free_models: 3
+
+  openai:
+    api_key: "YOUR_OPENAI_API_KEY"
+    model: "gpt-4o-mini"
+```
+
+If the paid fallback key is missing, OpenRouter still tries the ranked free models and `openrouter/free`; only the final fallback step fails.
 
 ## Authentication flow
 
@@ -61,6 +114,7 @@ docker compose up -d
 
 1. **Primary** — `youtube-transcript-api` fetches existing captions (fast, no download)
 2. **Fallback** — if no captions exist, `yt-dlp` downloads the audio and `faster-whisper` transcribes it locally
+3. **Failure handling** — if captions, download, transcription, and optional Vision all produce no usable input, the bot returns a clear Telegram error instead of saving an empty note
 
 ## LLM extraction
 
@@ -127,6 +181,25 @@ llm:
 
 In practice the free path succeeds the vast majority of the time during off-peak hours. The paid fallback is a safety net for burst rate limiting.
 
+## Telegram commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Authenticate with the shared password |
+| `/setup` | Configure LLM, storage, Vision, and language from Telegram |
+| `/status` | Show masked active configuration |
+| `/history` | Show recent saved entries with source/delete actions |
+
+## Troubleshooting
+
+| Symptom | Check |
+|---------|-------|
+| `python` shows syntax errors on type hints | Use `python3`; Python 2 is still the default on some machines |
+| Bot says setup is incomplete | Run `/status` and configure missing LLM/storage values with `/setup` |
+| Shorts with no captions fail | Confirm `ffmpeg` is installed and Docker has network access for `yt-dlp` |
+| Obsidian notes are not created in Docker | Mount the vault path into the container and use the container path in config |
+| Ollama fails in Docker | Use `host.docker.internal` or uncomment the compose `extra_hosts` block on Linux |
+
 ## Storage backends
 
 ### Notion
@@ -163,10 +236,18 @@ bot/
     ollama.py    — Ollama adapter
     openai.py    — OpenAI adapter
     anthropic.py — Anthropic adapter
+    openrouter.py — OpenRouter free-model adapter
   storage/
     base.py      — StorageBackend ABC
     notion.py    — Notion adapter
     obsidian.py  — Obsidian adapter
 data/            — runtime data (gitignored)
   users.db       — authenticated user IDs
+```
+
+## Verification
+
+```bash
+python3 -m compileall -q bot
+python3 -m unittest discover -s tests
 ```

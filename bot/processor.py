@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class NoTranscriptError(RuntimeError):
+    """Raised when neither captions nor fallback download/transcription produce input."""
+
+
 async def process_url(
     url: str,
     llm: LLMBackend,
@@ -29,6 +33,11 @@ async def process_url(
     Returns (entry, confirmation_message, storage_ref, model_name).
     """
     combined_input = await _build_llm_input(url, vision)
+    if not combined_input.strip():
+        raise NoTranscriptError(
+            "Could not extract captions, download audio, or analyze visual content for this video."
+        )
+
     logger.info("LLM input ready (%d chars) for %s", len(combined_input), url)
 
     result, model_name = await llm.extract(combined_input)

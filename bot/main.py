@@ -14,7 +14,7 @@ from aiogram.types import Message
 from bot.auth import authenticate_user, init_db, is_authenticated
 from bot.config import apply_db_settings, load_config
 from bot.i18n import t
-from bot.processor import process_url
+from bot.processor import NoTranscriptError, process_url
 from bot.settings_db import add_history_entry, get_all_settings, get_ui_lang, init_settings_db
 from bot.setup import create_setup_router, entry_inline_kb
 from bot.state import BotState
@@ -122,7 +122,10 @@ async def handle_url(message: Message, bot_state: BotState) -> None:
             parse_mode="HTML",
         )
 
-    except Exception as e:
+    except NoTranscriptError:
+        logger.info("No usable transcript or visual content for URL %s", url)
+        await processing_msg.edit_text(t("error_no_transcript", lang))
+    except Exception:
         logger.exception("Failed to process URL %s", url)
         await processing_msg.edit_text(t("error", lang))
 

@@ -230,6 +230,13 @@ def apply_db_settings(config: AppConfig, settings: dict[str, str]) -> None:
         config.llm.openai.api_key = _s("llm.openai.api_key")
     if not config.llm.anthropic.api_key:
         config.llm.anthropic.api_key = _s("llm.anthropic.api_key")
+    if not config.llm.openrouter.api_key:
+        config.llm.openrouter.api_key = _s("llm.openrouter.api_key")
+    if "llm.openrouter.max_free_models" in settings:
+        try:
+            config.llm.openrouter.max_free_models = int(settings["llm.openrouter.max_free_models"])
+        except ValueError:
+            pass
     if not os.getenv("OLLAMA_URL") and "llm.ollama.url" in settings:
         config.llm.ollama.url = settings["llm.ollama.url"]
 

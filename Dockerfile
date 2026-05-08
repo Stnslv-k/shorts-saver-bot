@@ -14,9 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install -U yt-dlp
 
 COPY bot/ bot/
-COPY config.yaml .
 
 # Runtime data (SQLite DB) lives in a volume
 VOLUME ["/app/data"]
 
-CMD ["python", "-m", "bot.main"]
+CMD ["python3", "-m", "bot.main"]
