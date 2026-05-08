@@ -33,6 +33,8 @@ storage:
     database_id: "YOUR_NOTION_DATABASE_ID"
 
   obsidian:
+    # Local run: use an absolute path inside your Obsidian vault.
+    # Docker run: mount a host folder in docker-compose.yml and use the container path (for example "/vault").
     vault_path: "/path/to/your/vault/YouTube Shorts"
 
 vision:

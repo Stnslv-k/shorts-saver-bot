@@ -10,8 +10,7 @@ def build_llm_backend(config: LLMConfig) -> LLMBackend:
     if config.backend == "openrouter":
         if not config.openrouter.api_key:
             raise ValueError("openrouter.api_key is required when backend is 'openrouter'")
-        fallback_name = config.fallback or "openai"
-        fallback = _make_backend(fallback_name, config)
+        fallback = _make_openrouter_fallback(config)
         return OpenRouterSmartBackend(
             api_key=config.openrouter.api_key,
             fallback=fallback,
@@ -33,6 +32,29 @@ def _make_backend(name: str, config: LLMConfig) -> LLMBackend:
     if name == "anthropic":
         return AnthropicAdapter(config.anthropic)
     raise ValueError(f"Unknown LLM backend: {name!r}")
+
+
+def _make_openrouter_fallback(config: LLMConfig) -> LLMBackend:
+    fallback_name = config.fallback
+    if not fallback_name:
+        return UnavailableLLMBackend("No OpenRouter fallback backend is configured.")
+
+    if fallback_name == "openai" and not config.openai.api_key:
+        return UnavailableLLMBackend("OpenAI fallback is configured but OPENAI_API_KEY is missing.")
+    if fallback_name == "anthropic" and not config.anthropic.api_key:
+        return UnavailableLLMBackend("Anthropic fallback is configured but ANTHROPIC_API_KEY is missing.")
+    if fallback_name == "openrouter":
+        return UnavailableLLMBackend("OpenRouter cannot use itself as its fallback backend.")
+
+    return _make_backend(fallback_name, config)
+
+
+class UnavailableLLMBackend(LLMBackend):
+    def __init__(self, reason: str) -> None:
+        self._reason = reason
+
+    async def extract(self, transcript: str):
+        raise RuntimeError(self._reason)
 
 
 class FallbackLLMBackend(LLMBackend):
