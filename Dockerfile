@@ -9,9 +9,6 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# yt-dlp releases multiple times per week to keep up with YouTube changes;
-# always upgrade past the pinned version so nsig extraction stays current.
-RUN pip install -U yt-dlp
 
 COPY bot/ bot/
 

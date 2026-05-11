@@ -5,10 +5,10 @@ services:
     volumes:
       - ./data:/app/data
       - ./config.yaml:/app/config.yaml:ro
-      # Optional Obsidian mount. Match this with storage.obsidian.vault_path.
-      # - ./obsidian:/vault
+      - ${OBSIDIAN_HOST_VAULT_PATH:-./obsidian}:/vault
     environment:
       - PYTHONUNBUFFERED=1
+      - OBSIDIAN_VAULT_PATH=/vault
     # Uncomment to co-locate with a local Ollama instance:
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"

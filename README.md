@@ -64,13 +64,32 @@ You can also start with only `bot.token` and `bot.password`, then configure the 
 python3 -m bot.main
 ```
 
-### 5. Run with Docker
+### 5. Run one Short locally without Telegram
 
 ```bash
+./run-live "https://www.youtube.com/shorts/VIDEO_ID"
+```
+
+Useful flags:
+
+```bash
+./run-live --json "https://www.youtube.com/shorts/VIDEO_ID"
+./run-live --no-history "https://www.youtube.com/shorts/VIDEO_ID"
+./run-live --config /path/to/config.yaml "https://www.youtube.com/shorts/VIDEO_ID"
+./run-live --cookies-from-browser brave "https://www.youtube.com/shorts/VIDEO_ID"
+./run-live --cookies /path/to/cookies.txt "https://www.youtube.com/shorts/VIDEO_ID"
+```
+
+This command uses the same LLM, Vision, search, and storage backends as the bot, but prints the result in the terminal and saves it directly without Telegram auth or chat interaction.
+
+### 6. Run with Docker
+
+```bash
+export OBSIDIAN_HOST_VAULT_PATH="/path/to/your/obsidian/vault"
 docker compose up -d
 ```
 
-The compose file mounts `./config.yaml` and `./data`. For Obsidian, uncomment the optional vault mount in `docker-compose.yml` and set `storage.obsidian.vault_path` to the matching container path, for example `/vault`.
+The compose file mounts `./config.yaml`, `./data`, and an Obsidian directory to `/vault`. Inside Docker, `OBSIDIAN_VAULT_PATH=/vault` overrides `config.yaml`, so the bot writes to the mounted host folder instead of an internal container path.
 
 ## Configuration examples
 
@@ -194,6 +213,9 @@ In practice the free path succeeds the vast majority of the time during off-peak
 
 | Symptom | Check |
 |---------|-------|
+| `yt-dlp` says `Sign in to confirm you're not a bot` | Run `./run-live --cookies-from-browser brave ...` or set `YTDLP_COOKIES_FROM_BROWSER=brave` |
+| `./run-live` says backends are not ready | Set `llm.*` and `storage.*` in `config.yaml`, or keep using settings already stored by `/setup` |
+| Telegram bot says `Saved!` but nothing appears in Obsidian | For Docker runs, set `OBSIDIAN_HOST_VAULT_PATH` and recreate the container so `/vault` is mounted |
 | `python` shows syntax errors on type hints | Use `python3`; Python 2 is still the default on some machines |
 | Bot says setup is incomplete | Run `/status` and configure missing LLM/storage values with `/setup` |
 | Shorts with no captions fail | Confirm `ffmpeg` is installed and Docker has network access for `yt-dlp` |
@@ -250,4 +272,5 @@ data/            — runtime data (gitignored)
 ```bash
 python3 -m compileall -q bot
 python3 -m unittest discover -s tests
+./run-live --help
 ```

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -23,6 +24,20 @@ class ProcessorHelpersTest(unittest.TestCase):
     def test_extract_transcript_section_prefers_audio_marker(self) -> None:
         combined = "[VISUAL CONTENT]\nshown text\n\n[AUDIO TRANSCRIPT]\nspoken text"
         self.assertEqual(processor._extract_transcript_section(combined), "spoken text")
+
+    def test_yt_dlp_error_is_retryable_for_unavailable_format(self) -> None:
+        self.assertTrue(
+            processor._is_retryable_yt_dlp_error(
+                RuntimeError("Requested format is not available")
+            )
+        )
+
+    def test_find_downloaded_media_returns_existing_audio_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = f"{tmpdir}/video.m4a"
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("x")
+            self.assertEqual(processor._find_downloaded_media(tmpdir), path)
 
 
 class ProcessorFailureTest(unittest.IsolatedAsyncioTestCase):

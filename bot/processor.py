@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -269,35 +271,95 @@ async def _download_video(url: str, output_dir: str) -> str:
 
     output_template = str(Path(output_dir) / "video.%(ext)s")
 
-    ydl_opts = {
+    base_opts = {
         # Prefer audio-only to minimise download size; fall back to low-res muxed
         # when only combined streams are available (common on some Shorts).
-        "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[height<=480]/best",
-        "format_sort": ["abr", "asr"],  # prefer higher audio bitrate/sample-rate
         "outtmpl": output_template,
         "ignoreerrors": False,
         "no_warnings": False,
-        # Try multiple player clients in order so that if one is rate-limited or
-        # blocked (triggering "nsig extraction failed"), the next one takes over.
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web", "mweb", "android", "android_vr"],
-                "player_skip": ["webpage"],
-            }
-        },
     }
+    _apply_yt_dlp_auth(base_opts)
 
     loop = asyncio.get_event_loop()
 
     def _download() -> str:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        for f in Path(output_dir).iterdir():
-            if f.suffix in (".mp4", ".mkv", ".webm", ".mov", ".m4a", ".mp3", ".ogg", ".opus"):
-                return str(f)
+        last_error: Exception | None = None
+        for candidate in _yt_dlp_format_candidates():
+            ydl_opts = deepcopy(base_opts)
+            ydl_opts.update(candidate)
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                return _find_downloaded_media(output_dir)
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "yt-dlp download attempt failed with format=%s: %s",
+                    ydl_opts.get("format"),
+                    exc,
+                )
+                if not _is_retryable_yt_dlp_error(exc):
+                    raise
+        if last_error is not None:
+            raise last_error
         raise FileNotFoundError("Downloaded file not found after yt-dlp download")
 
     return await loop.run_in_executor(None, _download)
+
+
+def _yt_dlp_format_candidates() -> list[dict]:
+    return [
+        {
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[height<=480]/best",
+            "format_sort": ["abr", "asr"],
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["web", "mweb", "android", "android_vr"],
+                    "player_skip": ["webpage"],
+                }
+            },
+        },
+        {
+            "format": "140/bestaudio/best",
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["web", "mweb", "android"],
+                }
+            },
+        },
+        {
+            "format": "bestaudio/best",
+        },
+        {
+            "format": "best",
+        },
+    ]
+
+
+def _find_downloaded_media(output_dir: str) -> str:
+    for f in Path(output_dir).iterdir():
+        if f.suffix in (".mp4", ".mkv", ".webm", ".mov", ".m4a", ".mp3", ".ogg", ".opus"):
+            return str(f)
+    raise FileNotFoundError("Downloaded file not found after yt-dlp download")
+
+
+def _is_retryable_yt_dlp_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return (
+        "requested format is not available" in message
+        or "sign in to confirm you're not a bot" in message
+        or "http error 403" in message
+    )
+
+
+def _apply_yt_dlp_auth(ydl_opts: dict) -> None:
+    cookies_from_browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip()
+    cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
+
+    if cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
+    if cookies_file:
+        ydl_opts["cookiefile"] = cookies_file
 
 
 def _run_whisper(video_path: str) -> str:

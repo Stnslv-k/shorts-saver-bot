@@ -34,6 +34,9 @@ class ObsidianAdapter(StorageBackend):
         async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
             await f.write(content)
 
+        if not filepath.exists():
+            raise FileNotFoundError(f"Obsidian note was not created: {filepath}")
+
         logger.info("Obsidian note saved: %s", filepath)
         return f"Saved to Obsidian: {filepath.name}", str(filepath)
 
