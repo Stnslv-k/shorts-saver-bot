@@ -279,4 +279,4 @@ python3 -m unittest discover -s tests
 
 Prefer not to deal with config files and Docker manually? There is a setup package on Gumroad that includes an interactive installer script, a step-by-step PDF guide, and a ready-to-use Notion database template. The bot is running in about 3 minutes.
 
-→ [gumroad.com/l/shorts-saver-bot](https://gumroad.com/l/shorts-saver-bot)
+→ [gumroad.com/l/shorts-saver-bot](https://stasphere26.gumroad.com/l/waktiw)
